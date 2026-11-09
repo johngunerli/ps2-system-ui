@@ -81,11 +81,11 @@ make clean
 ## Project layout
 
 ```
-src/           C++ sources and headers
-docs/images/   Screenshots
-Makefile       Build + .app bundling
+src/                 C++ sources and headers
+docs/images/         Screenshots
+.cursor/skills/      Cursor skills (e.g. package-native-release)
+Makefile             Build + .app bundling
 ```
-
 ---
 
 ## License
