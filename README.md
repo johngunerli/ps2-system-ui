@@ -87,7 +87,3 @@ docs/images/         Screenshots
 Makefile             Build + .app bundling
 ```
 ---
-
-## License
-
-No license file is included yet. Add one (for example MIT or Apache-2.0) before publishing if you want others to reuse the code.
