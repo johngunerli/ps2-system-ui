@@ -1,123 +1,66 @@
 ---
 name: package-native-release
 description: >-
-  Build redistributable macOS DMG and Windows ZIP packages for the PS2 System
-  Menu (SDL2 C++ native app), including bundling SDL dylibs/DLLs and optional
-  GitHub Releases upload. Use when the user asks to make a DMG, Windows zip,
-  installer, distributable build, release artifact, or package the app for
-  other devices.
+  Package the PS2 System Menu native app into a redistributable macOS DMG
+  (with bundled SDL dylibs) or Windows ZIP. Use when the user asks to make a
+  DMG, Windows zip, installer, release artifact, or package the app for other
+  devices.
 ---
 
-# Package native release (macOS DMG + Windows ZIP)
+# Package native release
 
-Package this repo's native app so other people can run it without compiling.
+Teach the agent how to produce installable artifacts for this repo. Do not add packaging shell scripts to the repo unless the user asks.
 
-**Defaults for this project**
+## Project defaults
 
 | Setting | Value |
 | :--- | :--- |
-| App name | `PS2 System Menu` |
-| Bundle / binary | `PS2.app` / `ps2` (mac), `ps2.exe` (Windows when present) |
+| App | PS2 System Menu |
+| macOS bundle / binary | `PS2.app` / `ps2` |
 | Build | `make` / `make bundle` |
-| Output dir | `dist/` |
-
-Do **not** rewrite app source for cross-platform as part of this skill. Packaging only.
-
-## Workflow checklist
-
-```
-Progress:
-- [ ] 1. Confirm platform request (mac DMG / Windows ZIP / both / GitHub Release)
-- [ ] 2. Build + verify locally
-- [ ] 3. Run packaging script(s)
-- [ ] 4. Smoke-check the artifact
-- [ ] 5. (Optional) Upload with gh release
-```
+| Output | `dist/` (gitignored) |
 
 ## macOS DMG
 
-**Run from repo root:**
-
-```bash
-bash .cursor/skills/package-native-release/scripts/make-macos-dmg.sh
-```
-
-Script does:
+Run on macOS only.
 
 1. `make clean && make bundle`
-2. Copies Homebrew `libSDL2` + `libSDL3` into `PS2.app/Contents/Frameworks/`
-3. Rewrites install names / `@rpath` so the `.app` runs without Homebrew
-4. Ad-hoc codesigns the bundle
-5. Builds `dist/PS2-System-Menu-<version>-macos-<arch>.dmg` via `hdiutil`
+2. Create `PS2.app/Contents/Frameworks/`
+3. Copy Homebrew `libSDL2-2.0.0.dylib` (from `otool -L` / `brew --prefix sdl2-compat` or `sdl2`) into Frameworks
+4. Also copy `libSDL3.dylib` (and `libSDL3.0.dylib` if present) — `sdl2-compat` dlopens SDL3 at runtime
+5. `chmod u+w` the copied dylibs
+6. `install_name_tool -change` the binary’s SDL2 path to `@rpath/libSDL2-2.0.0.dylib`
+7. `install_name_tool -add_rpath @executable_path/../Frameworks` on the binary
+8. Set dylib ids to `@rpath/...`
+9. `xattr -cr PS2.app` then `codesign --force --deep --sign - PS2.app`
+10. Stage a temp folder with `PS2.app` + symlink `Applications` → `/Applications`
+11. `hdiutil create -volname "PS2 System Menu" -srcfolder <stage> -ov -format UDZO dist/PS2-System-Menu-<version>-macos-<arch>.dmg`
 
-**Overrides (env):**
-
-- `APP_BUNDLE` — default `PS2.app`
-- `VERSION` — default from `Info.plist` or `2.0`
-- `DMG_VOLUME_NAME` — default `PS2 System Menu`
-- `SKIP_BUILD=1` — package existing bundle only
-
-**Smoke check:** mount the DMG, open the app once, quit, detach.
-
-**Common failure:** app crashes on another Mac → SDL dylibs not bundled or rpaths wrong. Re-run the script; do not hand-copy a bare `ps2` binary into a DMG.
+Verify with `otool -L PS2.app/Contents/MacOS/ps2` — SDL2 must be `@rpath/...`, not `/opt/homebrew/...`.
 
 ## Windows ZIP
 
-This codebase is currently macOS-native (CoreText / Cocoa / `open`). A Windows ZIP is only valid when a Windows build already exists.
+This codebase is macOS-native today (CoreText / Cocoa). Do not invent a Windows binary.
 
-**If `ps2.exe` (or `dist/windows/ps2.exe`) is missing:**
+Only if `ps2.exe` and `SDL2.dll` already exist:
 
-1. Tell the user packaging cannot invent a Windows binary.
-2. Stop. Do not fabricate stubs or claim Windows support.
+1. Put them in a folder with a short `README.txt` (keep DLL beside the exe)
+2. Zip to `dist/PS2-System-Menu-<version>-windows-x64.zip`
 
-**When a Windows build exists, run:**
+If no Windows build exists, say so and stop.
 
-```bash
-bash .cursor/skills/package-native-release/scripts/make-windows-zip.sh
-```
+## GitHub Release (optional)
 
-Script expects:
-
-- `dist/windows/ps2.exe` (or set `WINDOWS_EXE`)
-- SDL2 runtime DLL beside the exe (copies from `SDL2_DLL` if provided)
-
-Produces: `dist/PS2-System-Menu-<version>-windows-x64.zip`
-
-**Manual Windows layout (if building elsewhere):**
-
-```
-ps2.exe
-SDL2.dll          # required; ship the DLL matching the toolchain
-README.txt        # short run notes
-```
-
-Zip that folder. No installer required for v1.
-
-## GitHub Release upload
-
-Only after artifacts exist in `dist/` and `gh` auth works:
+After artifacts exist and `gh auth status` works:
 
 ```bash
-VERSION=2.0
-gh release create "v${VERSION}" \
-  dist/PS2-System-Menu-*-macos-*.dmg \
-  dist/PS2-System-Menu-*-windows-*.zip \
-  --title "v${VERSION}" \
-  --notes "macOS DMG and Windows ZIP. Unofficial fan project; not affiliated with Sony."
+gh release create "v<version>" dist/*.dmg dist/*.zip --title "v<version>" --notes "Unofficial fan project; not affiliated with Sony."
 ```
 
-If `gh auth status` fails, stop and ask the user to run `gh auth login -h github.com`. Do not paste tokens into the skill or chat logs.
+Omit globs for missing platforms. If auth fails, ask the user to run `gh auth login`.
 
-Omit the Windows glob if that artifact was not built.
+## Rules
 
-## Agent rules
-
-- Prefer the scripts in `scripts/` over one-off shell; fix the script if it breaks.
-- Never commit `dist/`, `*.dmg`, `*.zip`, `PS2.app`, or Homebrew-copied dylibs unless the user explicitly asks.
-- Never claim the app is Windows-ready unless a real Windows binary was packaged.
-- Keep macOS packaging working even if Windows is skipped.
-
-## Extra detail
-
-- DMG layout / codesign notes: [macos-dmg.md](macos-dmg.md)
-- Windows zip expectations: [windows-zip.md](windows-zip.md)
+- Prefer one-shot shell in the terminal over committing `.sh` helpers
+- Never commit `dist/`, `*.dmg`, `*.zip`, or `PS2.app` unless asked
+- Never claim Windows support without a real Windows binary
