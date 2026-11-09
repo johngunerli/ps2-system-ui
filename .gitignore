@@ -1,0 +1,41 @@
+# Build outputs
+*.o
+*.a
+*.d
+ps2
+gamecube
+
+# Release artifacts
+dist/
+*.dmg
+*.zip
+
+# macOS app bundles
+*.app/
+PS2.app/
+GameCube.app/
+
+# macOS junk
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.clangd/
+compile_commands.json
+
+# Debug / profiling
+*.dSYM/
+*.profraw
+*.profdata
+
+# Env / secrets
+.env
+.env.*
+*.pem
